@@ -1,20 +1,22 @@
 ---
-title: "Storm damage in Property and Publich Health Between 1950 and 2011"
+title: "Severe Weather Events in the US between 1950 and 2011: Costs in Property and Publich Health"
 output: 
   html_document:
     keep_md: true
 ---
 
-##Synopsis
-Bla Bla Bla
+###Synopsis
 
-##Data Processing
+This report is based on a NOAA Storm Dataset containing over 900K meteorological events made across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types specified at **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage made to both property and publich health, categorized by each and every event type. The events with the most mortality rates were X,Y,Z. The study of the correlation between injury and fatality rate is an ineresting question but unfortunately will not be covered by the scope of this report. Among the most destructive events in terms of loss of property and corps are X,Y,Z with averagely more than Billions USD. 
 
+###Data Processing
 ```{r,echo=T, cache=T}
 sessionInfo()
 ```
 
+Loading required packages.
 ```{r,echo=T, cache=T, message = F}
+# detaching plyr to avoid conflicts with dplyr
 detach(package:plyr)
 require(dplyr)
 require(ggplot2)
@@ -23,68 +25,53 @@ require(stringr)
 
 Loading the dataset into R
 ```{r,echo=T, cache=T}
+# loading the dataset into R
+d <- read.csv(bzfile("storm.bz2"), stringsAsFactors=F)
+
 # dataset was downloaded from: "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 # dataset was downloaded on:   "2015-04-18 07:37:06 CEST"
 
-# loading the dataset into R
-d <- read.csv(bzfile("storm.bz2"), stringsAsFactors=F)
+# exploring dimensions and variables
 str(d)
 ```
 
-Projecting dataset to contain only those relevant variables, which reflect damage to either health or property
-```{r,echo=T, cache=T}
-names(d)
+The to the loss assement essential variables are listed in the table below. The rest of the variables can be ignored for the scope of our study - making our dataset more lightweight to work with. 
 
-# subsetting
+| variable        | description                 |
+|:----------------|:----------------------------|
+| EVTYPE          | event type                  |
+| FATALITIES      | total fatalities            |
+| INJURIES        | total injuries              |
+| PROPDMG         | property damage - mantissa  |
+| PROPDMGEXP      | property damage - exponent  |
+| CROPDMG         | crop damage - mantissa      |
+| CROPDMGEXP      | crop damage - exponent      |
+| REMARKS         | additional information*     | 
+
+*will be used for cases where EVTYPE are of a form of "Summary of.." 
+```{r,echo=T, cache=T}
+# projecting dataset
 cols <- c(8,23:28,36)
-names(d)[cols]
 d <- d[,cols]
+names(d)
 ```
 
-Tiding up the event variable will be the focus of the follwing phase.
+The examination of the size of the unique values of EVTYPE yields a fairly bigger figure than the 48 permitted events by NOAA. We will therefore have to tidy up ETYPES and bring it to a more consistent state.
 ```{r,echo=T, cache=T}
 e_types <- d$EVTYPE
 length(unique(e_types))
-
-# applying string manipulation to clean the EVTYPE variable
-# Upper Case
-e_types <- toupper(e_types)
-# removing non alphabetical chars
-e_types <- gsub("[^A-Z ]", " ",  e_types)
-# removing spaces
-e_types <- gsub("[ ]+", " ",  e_types)
-# trimming
-e_types <- str_trim(e_types)
-
-length(unique(e_types))
 ```
 
-There's still away to go. The pdf blabla tells us in section blabla that there are 48 approved event types.example:
-```{r,echo=T, cache=T}
-u <- unique(e_types)
-u[grepl("SNOW[A-Z]+", u)]
-```
+In the next section I would like to demonstrate a method to clean EVTYPE. The strategy would be in general to **automatically** find a best match between a given EVTYPE to a probable candidate in **Table 1**. To find such a match I will introduce a simple utility function written specficily for that purpose. Prior to finding a best match, we will have to reduce the noise, i.e the modficiations of simliar words to the ones in **Table 1**, and the complete removal of foreign. For that I will apply some simple techniches of string manipulations, such as replacement of non alphabetical character, and introduce a second utilty function that utilizes the filtering. My objective was to fully automate this process. However I could not avoid using one single manual step: copying the table from the pdf into a text file format. 
 
-```{r,echo=T, cache=T}
-e_types <- gsub("[A-Z]*FLOOD[A-Z]*", " FLOOD ", e_types)
-e_types <- gsub("[A-Z]*SNOW[A-Z]*", " SNOW ", e_types)
-e_types <- gsub("[A-Z]*WILDFIRES[A-Z]*", " WILDFIRES ", e_types)
-e_types <- gsub("[A-Z]*TSTM[A-Z]*", " THUNDERSTORM ", e_types)
-length(unique(e_types))
-```
-Replacement of summary
-```{r,echo=T, cache=T}
-# TODO
-```
 
-NOAA noaa_glossary.
-Example on non existing term
+#####Copy Table 1
+goto [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and scroll down to page 6 to Table 1 *Storm Data*, mark the table with the mouse, copy the content to a clipboard, create a text file called *"noaa_e_types.txt"*, and paste the clipboard into it.
 ```{r,echo=T, cache=T}
-# TODO
 ```
-
-manual step : goto pdf copy paste into bla
+  
 ```{r,echo=T, cache=T}
+
 noaa_glossary <- scan("noaa_e_types.txt", what = "characters")
 noaa_glossary <- unique(noaa_glossary)
 noaa_glossary <- unlist(strsplit(noaa_glossary,"[^a-zA-Z]", fixed=F))
@@ -96,8 +83,8 @@ noaa_glossary
 # declaring a utility function 
 noaa_filter <- function(s_vec, dictionary, replacement = "*") {
   r_vec <- c()
-	for (s in s_vec) {
-		token <- ""
+  for (s in s_vec) {
+  	token <- ""
 		split <- unlist(strsplit(s, " "))
 		for (w in split) {
 			if (w %in% dictionary) {
@@ -116,7 +103,56 @@ noaa_filter <- function(s_vec, dictionary, replacement = "*") {
 # usage example
 eu <- unique(e_types)
 data.frame(before = eu[658:660], after = noaa_filter(eu[658:660], noaa_glossary, "(*)"))
+```
+Handling EVTYPE of the form of "Summary of .."
+The information describing these type of events is given as a free text under the REMARKS variable. A propert way threfore to handle the cleanup in these situations would be to anlayze the REMARKS variable, understanding its context, and finding it a suitable match in **Table 1**. However, after examining the rate of such an occurance, we can see that it is noticeably low. For the sake of ease of calculation, I would assign the type "" 
+```{r,echo=T, cache=T}
+# example
+head(d[grepl(".*summary.*", d[,1], ignore.case = T), c(1,8)],1)
 
+# ratio 
+e_summary <- grepl(".*summary.*", d[,1], ignore.case = T)
+data.table( mean = mean(e_summary), total = sum(e_summary))
+```
+
+```{r,echo=T, cache=T}
+# applying string manipulation to clean the EVTYPE variable
+# upper Case
+e_types <- toupper(e_types)
+# removing non alphabetical chars
+e_types <- gsub("[^A-Z ]", " ",  e_types)
+# removing spaces
+e_types <- gsub("[ ]+", " ",  e_types)
+# trimming
+e_types <- str_trim(e_types)
+
+length(unique(e_types))
+```
+
+##### Modifying similar words
+```{r example,echo=T, cache=T}
+u <- unique(e_types)
+u[grepl("SNOW[A-Z]+", u)]
+```
+
+```{r,echo=T, cache=T}
+e_types <- gsub("[A-Z]*FLOOD[A-Z]*", " FLOOD ", e_types)
+e_types <- gsub("[A-Z]*SNOW[A-Z]*", " SNOW ", e_types)
+e_types <- gsub("[A-Z]*WILDFIRES[A-Z]*", " WILDFIRES ", e_types)
+e_types <- gsub("[A-Z]*TSTM[A-Z]*", " THUNDERSTORM ", e_types)
+length(unique(e_types))
+```
+
+
+
+NOAA noaa_glossary.
+Example on non existing term
+```{r,echo=T, cache=T}
+# TODO
+```
+
+
+```{r,echo=T, cache=T}
 df0 <- data.frame(e_type=eu, e_filtered = noaa_filter(eu, noaa_glossary, ""))
 eu <- unique(df0$e_filtered)
 length(eu)
@@ -183,76 +219,4 @@ d[,1] <- e_types
 d <- d[nchar(d$EVTYPE) > 0,]
 ```
 
-Group and summarize
-```{r,echo=T, cache=F, message = F}
-library(dplyr)
-grp <- group_by(d, EVTYPE)
-summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
-summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
-summarized
-```
 
-Economic damage.
-+, - will be count as 0. in pdf it said that sometimes the input is incomplete. ? we can make an additional estimation of the damage replaying on appendinx B. But we will leave it for next time. calculate the mean of missing values
-```{r,echo=T, cache=F, message = F}
-# property
-prop_dmg_exp <- data.frame(PROPDMGEXP = d$PROPDMGEXP, stringsAsFactors = F)
-unique(prop_dmg_exp$PROPDMGEXP)
-
-# quite a lot of data is incomplete
-mean(grepl("[- ?+]|(^$)", prop_dmg_exp$PROPDMGEXP))
-
-magnitudes_chr = c("B", "b", "M", "m", "K", "k" , "H", "h", 9:0, "+", "-", "", "?")
-magnitudes_num = c(9, 9, 6, 6, 3, 3, 2, 2, 9:0, 0, 0, 0, 0)
-magnitudes <- data.frame(PROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
-head(magnitudes)
-
-prop_dmg_exp_num <- left_join(prop_dmg_exp, magnitudes)
-d$PROPDMGEXP <- prop_dmg_exp_num$value
-
-# crop
-crop_dmg_exp <- data.frame(CROPDMGEXP = d$CROPDMGEXP, stringsAsFactors = F)
-unique(crop_dmg_exp$CROPDMGEXP)
-
-# quite a lot of data is incomplete
-mean(grepl("[- ?+]|(^$)", crop_dmg_exp$CROPDMGEXP))
-magnitudes <- data.frame(CROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
-
-crop_dmg_exp_num <- left_join(crop_dmg_exp, magnitudes)
-d$CROPDMGEXP <- crop_dmg_exp_num$value
-
-## group & summarize
-
-grp_dmg <- filter(d, PROPDMG > 0 | CROPDMG > 0) %>% group_by(EVTYPE)
-summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9)
-summarized_dmg
-
-```
-
-#Results
-```{r,echo=T, cache=F, message = F}
-require(ggplot2)
-
-# fatalities
-m <- summarized[,c(1,4)]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=fatalities_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Fatalities") + xlab("Event") + ggtitle(expression(atop("Average fatality rate in a single person's life", atop("USA 1950 - 2011"))))
-
-# injuries
-m <- summarized[,c(1,6)]
-m <- m[order(-m$injuries_mean),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=injuries_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Injuries") + xlab("Event") + ggtitle(expression(atop("Average injury rate", atop("USA 1950 - 2011"))))
-
-# property damage
-m <- summarized_dmg[,c(1,3)]
-m <- m[order(-m$total_prop_dmg),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=total_prop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total property damage in billions of dollars", atop("USA 1950 - 2011"))))
-
-# crop damage
-m <- summarized_dmg[,c(1,4)]
-m <- m[order(-m$total_crop_dmg),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=total_crop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total crop damage in billions of dollars", atop("USA 1950 - 2011"))))
-```
