@@ -1,5 +1,5 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "Storm damage in Property and Publich Health Between 1950 and 2011"
 output: 
   html_document:
     keep_md: true
@@ -15,9 +15,9 @@ sessionInfo()
 ```
 
 ```{r,echo=T, cache=T, message = F}
+detach(package:plyr)
 require(dplyr)
-require(plyr)
-require(ggplo2)
+require(ggplot2)
 require(stringr)
 ```
 
@@ -158,7 +158,7 @@ noaa_match <- function(s_vec, with_vec) {
 }
 
 # usage example
-data.frame(event = eu[1:3], match = noaa_match(eu[1:3], noaa_e_types))
+data.frame(event = eu[6:9], match = noaa_match(eu[6:9], noaa_e_types))
 
 df1 <- data.frame(e_filtered=eu, bool=eu %in% noaa_e_types)
 df1$e_match <- noaa_match(eu, noaa_e_types)
@@ -168,14 +168,14 @@ df1[!df1$bool,c(1,3)][148:155,]
 To complete the phase, lets merge df0, df1 and e_types
 ```{r,echo=T, cache=T}
 # joining df0 and df1
-df_0_1 <- join(df0,df1)
+df_0_1 <- left_join(df0,df1)
 head(df_0_1)
 df_0_1 <- df_0_1[,c(1,4)]
 head(df_0_1)
 
 # joining e_types and df_0_1
-e_joined <- join(data.frame(e_type=e_types),df_0_1)
-sample(e_joined)
+e_joined <- left_join(data.frame(e_type=e_types),df_0_1)
+sample_n(e_joined, 10)
 e_types <- e_joined$e_match
 d[,1] <- e_types
 
@@ -185,10 +185,74 @@ d <- d[nchar(d$EVTYPE) > 0,]
 
 Group and summarize
 ```{r,echo=T, cache=F, message = F}
-#library(dplyr)
-#grp <- group_by(d, EVTYPE)
-#summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), #injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
-#summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
-#summarized
+library(dplyr)
+grp <- group_by(d, EVTYPE)
+summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
+summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
+summarized
 ```
-##Results
+
+Economic damage.
++, - will be count as 0. in pdf it said that sometimes the input is incomplete. ? we can make an additional estimation of the damage replaying on appendinx B. But we will leave it for next time. calculate the mean of missing values
+```{r,echo=T, cache=F, message = F}
+# property
+prop_dmg_exp <- data.frame(PROPDMGEXP = d$PROPDMGEXP, stringsAsFactors = F)
+unique(prop_dmg_exp$PROPDMGEXP)
+
+# quite a lot of data is incomplete
+mean(grepl("[- ?+]|(^$)", prop_dmg_exp$PROPDMGEXP))
+
+magnitudes_chr = c("B", "b", "M", "m", "K", "k" , "H", "h", 9:0, "+", "-", "", "?")
+magnitudes_num = c(9, 9, 6, 6, 3, 3, 2, 2, 9:0, 0, 0, 0, 0)
+magnitudes <- data.frame(PROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
+head(magnitudes)
+
+prop_dmg_exp_num <- left_join(prop_dmg_exp, magnitudes)
+d$PROPDMGEXP <- prop_dmg_exp_num$value
+
+# crop
+crop_dmg_exp <- data.frame(CROPDMGEXP = d$CROPDMGEXP, stringsAsFactors = F)
+unique(crop_dmg_exp$CROPDMGEXP)
+
+# quite a lot of data is incomplete
+mean(grepl("[- ?+]|(^$)", crop_dmg_exp$CROPDMGEXP))
+magnitudes <- data.frame(CROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
+
+crop_dmg_exp_num <- left_join(crop_dmg_exp, magnitudes)
+d$CROPDMGEXP <- crop_dmg_exp_num$value
+
+## group & summarize
+
+grp_dmg <- filter(d, PROPDMG > 0 | CROPDMG > 0) %>% group_by(EVTYPE)
+summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9)
+summarized_dmg
+
+```
+
+#Results
+```{r,echo=T, cache=F, message = F}
+require(ggplot2)
+
+# fatalities
+m <- summarized[,c(1,4)]
+m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
+ggplot(m, aes(x=EVTYPE, y=fatalities_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Fatalities") + xlab("Event") + ggtitle(expression(atop("Average fatality rate in a single person's life", atop("USA 1950 - 2011"))))
+
+# injuries
+m <- summarized[,c(1,6)]
+m <- m[order(-m$injuries_mean),]
+m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
+ggplot(m, aes(x=EVTYPE, y=injuries_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Injuries") + xlab("Event") + ggtitle(expression(atop("Average injury rate", atop("USA 1950 - 2011"))))
+
+# property damage
+m <- summarized_dmg[,c(1,3)]
+m <- m[order(-m$total_prop_dmg),]
+m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
+ggplot(m, aes(x=EVTYPE, y=total_prop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total property damage in billions of dollars", atop("USA 1950 - 2011"))))
+
+# crop damage
+m <- summarized_dmg[,c(1,4)]
+m <- m[order(-m$total_crop_dmg),]
+m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
+ggplot(m, aes(x=EVTYPE, y=total_crop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total crop damage in billions of dollars", atop("USA 1950 - 2011"))))
+```
