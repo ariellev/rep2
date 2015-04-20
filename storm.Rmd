@@ -7,7 +7,7 @@ output:
 
 ### Synopsis
 
-This report is based on a NOAA Storm Dataset containing over 900K meteorological events made across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types specified at **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage made to both property and publich health, categorized by each and every event type. The events with the most mortality rates were X,Y,Z. The study of the correlation between injury and fatality rate is an ineresting question but unfortunately will not be covered by the scope of this report. Among the most destructive events in terms of loss of property and corps are X,Y,Z with averagely more than Billions USD. 
+This report is based on a NOAA Storm Dataset containing over 900K meteorological events made across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types specified at **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage made to both property and publich health, categorized by each and every event type. The events with the most average mortality rates were: tsunami (1.65) , heat (1.27), excessive heat (1.10) and rip current (0.73). The study of the correlation between injury and fatality rate is by itself an ineresting question, but unfortunately will not be covered by the scope of this report. Among the most destructive events in terms of loss of property are flood, hurricane/typhoon, and tornados with averagely more than 150, 85 and 57 Billions USD correspondly. In the crops category are drought, flood and hurricane/typhoon the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD each correspondly.
 
 ### Data Processing
 ```{r,echo=T, cache=T}
@@ -34,6 +34,7 @@ d <- read.csv(bzfile("storm.bz2"), stringsAsFactors=F)
 # exploring dimensions and variables
 str(d)
 ```
+
 
 The to the loss assement essential variables are listed in the table below. The rest of the variables can be ignored for the scope of our study - making our dataset more lightweight to work with. 
 
@@ -124,8 +125,8 @@ noaa_e_types
 noaa_filter <- function(s_vec, dictionary, replacement = "*") {
   r_vec <- c()
   for (s in s_vec) {
-  	token <- ""
-		split <- unlist(strsplit(s, " "))
+    token <- ""
+  	split <- unlist(strsplit(s, " "))
 		for (w in split) {
 			if (w %in% dictionary) {
 			  token <- paste(token, w)
@@ -202,13 +203,15 @@ e_types <- gsub("[A-Z]*FLOOD[A-Z]*", " FLOOD ", e_types)
 e_types <- gsub("[A-Z]*SNOW[A-Z]*", " SNOW ", e_types)
 e_types <- gsub("[A-Z]*WILDFIRES[A-Z]*", " WILDFIRES ", e_types)
 e_types <- gsub("[A-Z]*TSTM[A-Z]*", " THUNDERSTORM ", e_types)
-length(unique(e_types))
+
+eu <- unique(e_types)
+length(eu)
 ```
 
 #### Filtering EVTYPE
 
 ```{r,echo=T, cache=T}
-df0 <- data.frame(e_type=eu, e_filtered = noaa_filter(eu, noaa_glossary, ""))
+df0 <- data.frame(e_type=eu, e_filtered = noaa_filter(eu, noaa_glossary, ""), stringsAsFactors = F)
 eu <- unique(df0$e_filtered)
 length(eu)
 ```
@@ -216,7 +219,7 @@ length(eu)
 #### Matching EVTYPE
 
 ```{r,echo=T, cache=T}
-df1 <- data.frame(e_filtered=eu, bool=eu %in% noaa_e_types)
+df1 <- data.frame(e_filtered=eu, bool=eu %in% noaa_e_types, stringsAsFactors = F)
 df1$e_match <- noaa_match(eu, noaa_e_types)
 df1[!df1$bool,c(1,3)][148:155,]
 ```
@@ -231,7 +234,7 @@ df_0_1 <- df_0_1[,c(1,4)]
 head(df_0_1)
 
 # joining e_types and df_0_1
-e_joined <- left_join(data.frame(e_type=e_types),df_0_1)
+e_joined <- left_join(data.frame(e_type=e_types, stringsAsFactors = F),df_0_1)
 sample_n(e_joined, 10)
 e_types <- e_joined$e_match
 d[,1] <- e_types
