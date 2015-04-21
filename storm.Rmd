@@ -1,5 +1,5 @@
 ---
-title: "Severe Weather Events in the US between 1950 and 2011: Costs in Property and Publich Health"
+title: "Severe Weather Events in the US between 1950 and 2011: Costs in Property and Public Health"
 output: 
   html_document:
     keep_md: true
@@ -7,16 +7,20 @@ output:
 
 ### Synopsis
 
-This report is based on a NOAA Storm Dataset containing over 900K meteorological events made across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types specified at **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage made to both property and publich health, categorized by each and every event type. The events with the most average mortality rates were: tsunami (1.65) , heat (1.27), excessive heat (1.10) and rip current (0.73). The study of the correlation between injury and fatality rate is by itself an ineresting question, but unfortunately will not be covered by the scope of this report. Among the most destructive events in terms of loss of property are flood, hurricane/typhoon, and tornados with averagely more than 150, 85 and 57 Billions USD correspondly. In the crops category are drought, flood and hurricane/typhoon the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD each correspondly.
+This report is based on a NOAA Storm Dataset containing over 900K meteorological events gathered across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types as specified in **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage caused by each event type to both property and public health. The ones with the highest average mortality rates are: tsunami (1.65) , heat (1.27), excessive heat (1.10) and rip current (0.73). There question of the correlation between injury and fatality rate is an interesting topic, but unfortunately will not be covered by the scope of this report. Flood, hurricane/typhoon and tornado are considered the most destructive events in terms of loss of property - with averagely more than 150, 85 and 57 Billions USD correspondly. As for the crops category, drought, flood and hurricane/typhoon are the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD each correspondly.
+
+```{r,echo=F, message=F}
+library(knitr)
+opts_knit$set(cache=T)
+```
 
 ### Data Processing
-```{r,echo=T, cache=T}
+```{r,echo=T}
 sessionInfo()
 ```
 
 Loading required packages.
-```{r,echo=T, cache=T, message = F}
-# detaching plyr to avoid conflicts with dplyr
+```{r,echo=T, message = F, cache=F}
 detach(package:plyr)
 require(dplyr)
 require(ggplot2)
@@ -24,7 +28,7 @@ require(stringr)
 ```
 
 Loading the dataset into R
-```{r,echo=T, cache=T}
+```{r,echo=T}
 # loading the dataset into R
 d <- read.csv(bzfile("storm.bz2"), stringsAsFactors=F)
 
@@ -50,7 +54,7 @@ The to the loss assement essential variables are listed in the table below. The 
 | REMARKS         | additional information*     | 
 
 * REMARKS is necessary in cases where EVTYPE is of a form of "Summary of.." 
-```{r,echo=T, cache=T}
+```{r,echo=T}
 # projecting dataset
 cols <- c(8,23:28,36)
 d <- d[,cols]
@@ -58,7 +62,7 @@ names(d)
 ```
 
 The examination of the size of the unique values of EVTYPE yields a fairly bigger figure than the 48 permitted events by NOAA. We will therefore have to tidy up ETYPES and bring it to a more consistent state.
-```{r,echo=T, cache=T}
+```{r,echo=T}
 e_types <- d$EVTYPE
 length(unique(e_types))
 ```
@@ -69,7 +73,7 @@ In this section I would like to demonstrate a method to clean EVTYPE. The strate
 
 #### Basic string manipulations
 
-```{r,echo=T, cache=T}
+```{r,echo=T}
 # applying string manipulation to clean the EVTYPE variable
 # upper Case
 e_types <- toupper(e_types)
@@ -86,7 +90,7 @@ length(unique(e_types))
 #### Copy Table 1
 open [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and scroll down to page 6 to **Table 1 *Storm Data***, mark the table with the mouse, copy the content to a clipboard, create a text file called *"noaa_e_types.txt"*, and paste the clipboard into it.
 Afterwards, based on the file's data, we will create two R variables *noaa_glossary* and *noaa_e_types*
-```{r noaa_e_types.txt,echo=T, cache=T}
+```{r noaa_e_types.txt,echo=T}
 system("head noaa_e_types.txt")
 # Astronomical Low Tide Z
 # Avalanche Z
@@ -120,20 +124,24 @@ noaa_e_types
 
 #### Utility function: noaa_filter
 
-```{r glossary,echo=T, cache=T}
+```{r glossary,echo=T}
 # declaring a filter utility function 
+# input: string vector, dictionary, replacement string
 noaa_filter <- function(s_vec, dictionary, replacement = "*") {
+  # initializing result vector
   r_vec <- c()
   for (s in s_vec) {
     token <- ""
   	split <- unlist(strsplit(s, " "))
 		for (w in split) {
+      # lookup
 			if (w %in% dictionary) {
 			  token <- paste(token, w)
 			} else {
  			  token <- paste(token, replacement)
 			}
 		}
+    # tidying and appending to result vector
 		token <- gsub("[ ]+", " ",  token)
 		token <- str_trim(token)
 		r_vec <- append(r_vec, token)
@@ -148,23 +156,26 @@ data.frame(before = eu[658:660], after = noaa_filter(eu[658:660], noaa_glossary,
 
 #### Utility function: noaa_match
 
-```{r,echo=T, cache=T}
+```{r,echo=T}
 # declaring a utility function 
-noaa_match <- function(s_vec, with_vec) {
+# input: string vector to be matched with candidates
+noaa_match <- function(s_vec, candidates) {
+  # initializing result vector  
   r_vec <- c()
   for (s in s_vec) {
   	split_s <- unlist(strsplit(s, " "))
-		found_total <- 0
-		found_word <- ""
-		for ( w in with_vec) {
-		  split_w <- unlist(strsplit(w, " "))
-		  inter <- length(intersect(split_s, split_w)) / length(union(split_s, split_w)) 
-		  if (inter > found_total) {
-			found_total <- inter
-			found_word <- w
+		max_matchability <- 0
+		match <- ""
+		for ( c in candidates) {
+		  split_c <- unlist(strsplit(c, " "))
+		  matchability <- length(intersect(split_s, split_c)) / length(union(split_s, split_c)) 
+		  if (matchability > max_matchability) {
+			  max_matchability <- matchability
+			  match <- c
 		  }
 		}
-		r_vec <- append(r_vec, found_word)
+    # tidying and appending to result vector    
+		r_vec <- append(r_vec, match)
 	}
 	r_vec
 }
@@ -176,7 +187,7 @@ data.frame(event = eu[6:9], match = noaa_match(eu[6:9], noaa_e_types))
 #### Handling EVTYPE of the form of "Summary of .."
 
 The information describing these type of events is given as a free text under the REMARKS variable. In this situtations we will match REMARKS with the events of **Table 1**.
-```{r,echo=T, cache=T}
+```{r,echo=T}
 # example
 head(d[grepl(".*summary.*", e_types, ignore.case = T), 8],1)
 
@@ -195,14 +206,24 @@ e_types[e_summary] <- remarks
 ```
 
 #### Modifying similar words
-```{r example,echo=T, cache=T}
+```{r example,echo=T}
 u <- unique(e_types)
 u[grepl("SNOW[A-Z]+", u)]
 
-e_types <- gsub("[A-Z]*FLOOD[A-Z]*", " FLOOD ", e_types)
-e_types <- gsub("[A-Z]*SNOW[A-Z]*", " SNOW ", e_types)
-e_types <- gsub("[A-Z]*WILDFIRES[A-Z]*", " WILDFIRES ", e_types)
+similarities <- c("FLOOD", "SNOW", "WIND", "WILDFIRES")
+for (s in similarities) {
+  regex <- paste0("[A-Z]*",s,"[A-Z]*")
+  exp <- paste0(" ",s," ")
+  e_types <- gsub( regex, exp, e_types)  
+}
+
+# abbreviations
 e_types <- gsub("[A-Z]*TSTM[A-Z]*", " THUNDERSTORM ", e_types)
+
+# removing spaces
+e_types <- gsub("[ ]+", " ",  e_types)
+# trimming
+e_types <- str_trim(e_types)
 
 eu <- unique(e_types)
 length(eu)
@@ -210,7 +231,7 @@ length(eu)
 
 #### Filtering EVTYPE
 
-```{r,echo=T, cache=T}
+```{r,echo=T}
 df0 <- data.frame(e_type=eu, e_filtered = noaa_filter(eu, noaa_glossary, ""), stringsAsFactors = F)
 eu <- unique(df0$e_filtered)
 length(eu)
@@ -218,7 +239,7 @@ length(eu)
 
 #### Matching EVTYPE
 
-```{r,echo=T, cache=T}
+```{r,echo=T}
 df1 <- data.frame(e_filtered=eu, bool=eu %in% noaa_e_types, stringsAsFactors = F)
 df1$e_match <- noaa_match(eu, noaa_e_types)
 df1[!df1$bool,c(1,3)][148:155,]
@@ -226,7 +247,7 @@ df1[!df1$bool,c(1,3)][148:155,]
 
 #### Merging and integrating matches to the primary dataset *e_types*
 
-```{r,echo=T, cache = T, message = F}
+```{r,echo=T, message = F}
 # joining df0 and df1
 df_0_1 <- left_join(df0,df1)
 head(df_0_1)
@@ -243,9 +264,9 @@ d[,1] <- e_types
 d <- d[nchar(d$EVTYPE) > 0,]
 ```
 
-### Cleaning Property and Crops
+### Cleaning Property and Crop Variables
 
-```{r,echo=T, cache=F, message = F}
+```{r,echo=T, message = F}
 # property
 prop_dmg_exp <- data.frame(PROPDMGEXP = d$PROPDMGEXP, stringsAsFactors = F)
 unique(prop_dmg_exp$PROPDMGEXP)
@@ -277,46 +298,26 @@ d$CROPDMGEXP <- crop_dmg_exp_num$value
 
 #### Public Health
 
-```{r,echo=T, cache=F, message = F}
-library(dplyr)
-
+```{r,echo=T, message = F}
 grp <- group_by(d, EVTYPE)
 summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
 summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
 summarized
 
-# fatalities
-m <- summarized[,c(1,4)]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=fatalities_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Fatalities") + xlab("Event") + ggtitle(expression(atop("Average fatality rate in a single person's life", atop("USA 1950 - 2011"))))
-
-# injuries
-m <- summarized[,c(1,6)]
-m <- m[order(-m$injuries_mean),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=injuries_mean)) + geom_bar(colour="black", fill = "blue", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Injuries") + xlab("Event") + ggtitle(expression(atop("Average injury rate", atop("USA 1950 - 2011"))))
+melted <- melt(summarized[,c(1,4,6)], c("EVTYPE"))
+melted$EVTYPE <- factor(summarized$EVTYPE,levels=summarized$EVTYPE)
+qplot(EVTYPE, value, data = melted, fill = variable, geom = "bar") + geom_bar(stat="identity", size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Persons") + xlab("Event") + ggtitle(expression(atop("Average Fatality and Injury Rate in Number of Persons", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Fatality", "Injury"))
 ```
 
 #### Property and Crops
 
-```{r,echo=T, cache=F, message = F}
-library(dplyr)
-detach(package:plyr)
-
+```{r,echo=T, message = F}
 grp_dmg <- filter(d, PROPDMG > 0 | CROPDMG > 0) %>% group_by(EVTYPE)
-summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9)
+summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9) %>% mutate(sub_total_dmg = total_prop_dmg + total_crop_dmg) %>% arrange(desc(sub_total_dmg)) 
 summarized_dmg
 
-
-# property damage
-m <- summarized_dmg[,c(1,3)]
-m <- m[order(-m$total_prop_dmg),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=total_prop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total property damage in billions of USD", atop("USA 1950 - 2011"))))
-
-# crop damage
-m <- summarized_dmg[,c(1,4)]
-m <- m[order(-m$total_crop_dmg),]
-m$EVTYPE <- factor(m$EVTYPE,levels=m$EVTYPE)
-ggplot(m, aes(x=EVTYPE, y=total_crop_dmg)) + geom_bar(colour="black", fill = "green", stat="identity", position=position_dodge(), size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("Total") + xlab("Event") + ggtitle(expression(atop("Total crop damage in billions of USD", atop("USA 1950 - 2011"))))
+e_factor <- factor(summarized_dmg$EVTYPE,levels=summarized_dmg$EVTYPE)
+melted <- melt(summarized_dmg[,c(1,3,4)], c("EVTYPE"))
+melted$EVTYPE <- e_factor
+qplot(EVTYPE, value, data = melted, fill = variable, geom = "bar") + geom_bar(stat="identity", size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Billions USD") + xlab("Event") + ggtitle(expression(atop("Total Damage to Properties and Crops in Billions of USD", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Properties", "Crops"))
 ```
