@@ -7,7 +7,7 @@ output:
 
 ### Synopsis
 
-This report is based on a NOAA Storm Dataset containing over 900K meteorological events gathered across the U.S. between 1950 and 2011. The meteorolgical events were categorized into 48 different types as specified in **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the damage caused by each event type to both property and public health. The ones with the highest average mortality rates are: tsunami (1.65) , heat (1.27), excessive heat (1.10) and rip current (0.73). There question of the correlation between injury and fatality rate is an interesting topic, but unfortunately will not be covered by the scope of this report. Flood, hurricane/typhoon and tornado are considered the most destructive events in terms of loss of property - with averagely more than 150, 85 and 57 Billions USD correspondly. As for the crops category, drought, flood and hurricane/typhoon are the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD each correspondly.
+This report is based on a NOAA Storm Dataset containing over 900K meteorological events that took place in the U.S. between the years 1950 and 2011. Meteorolgical events were categorized by NOAA into 48 different types as specified in **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the proportion of damage caused by each event type to both property and public health. The results show, that 14979 people lost their lives, 139260 others were injured. The events with the highest average mortality rate, 1.65, are Tsunamis. Second deadly phenomenon were Heats (1.27), followed by Excessive Heats (1.10) and Rip Currents (0.73). Highest injury rates were caused by Tsunamis (6.45), Hurricanes/Typhoons (4.48), Excessive Heats (3.78) and Heats (2.83). In regard of loss to property, I found out that Floods, Hurricanes/Typhoons and Tornados were the most destructive ones - with an average of more than 150, 85 and 57 Billions USD correspondingly. As for damage to crops, Droughts, Floods and Hurricanes/Typhoons were the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD correspondingly. The overall damage summed up to 472.79 Billions of USD.
 
 ```{r,echo=F, message=F}
 library(knitr)
@@ -21,10 +21,10 @@ sessionInfo()
 
 Loading required packages.
 ```{r,echo=T, message = F, cache=F}
-detach(package:plyr)
 require(dplyr)
 require(ggplot2)
 require(stringr)
+require(reshape2)
 ```
 
 Loading the dataset into R
@@ -40,7 +40,7 @@ str(d)
 ```
 
 
-The to the loss assement essential variables are listed in the table below. The rest of the variables can be ignored for the scope of our study - making our dataset more lightweight to work with. 
+The variables, on which our assessments essentially depends on, are listed in the table below. The rest of the variables can be ignored for the scope of our study - making our dataset more lightweight to work with.
 
 | variable        | description                 |
 |:----------------|:----------------------------|
@@ -60,18 +60,18 @@ cols <- c(8,23:28,36)
 d <- d[,cols]
 names(d)
 ```
-
-The examination of the size of the unique values of EVTYPE yields a fairly bigger figure than the 48 permitted events by NOAA. We will therefore have to tidy up ETYPES and bring it to a more consistent state.
+Lets see how many types of events are listed in the dataset.
 ```{r,echo=T}
 e_types <- d$EVTYPE
 length(unique(e_types))
 ```
+After a short examination of the size of the unique values of EVTYPE, it turns out that the figure is fairly bigger than the 48 permitted events by NOAA. We will therefore have to tidy up EVTYPE, and align it with the data provided by  **Table 1**
 
 ### Cleaning EVTYPE
 
-In this section I would like to demonstrate a method to clean EVTYPE. The strategy would be in general to **automatically** find a best match between a given EVTYPE to a probable candidate in **Table 1**. To find such a match I will introduce a simple utility function written specficily for that purpose. Prior to finding a best match, we will have to reduce the noise, i.e the modficiations of simliar words to the ones in **Table 1**, and the complete removal of foreign. For that I will apply some simple techniches of string manipulations, such as replacement of non alphabetical character, and introduce a second utilty function that utilizes the filtering. My objective was to fully automate this process. However I could not avoid using one single manual step: copying the table from the pdf into a text file format. 
+In this section I would like to demonstrate a method to clean EVTYPE. The strategy would be in general to **automatically** find a best match between a given EVTYPE to a possible candidate in **Table 1**. For that purpose I will introduce a simple but powerful utility function called ***noaa_match***. Prior to finding a match, we will have to reduce the noise, i.e terms extrinsic to **Table 1** ( lets say "Chocolate" or "Beer") - will have to be completely remove, and those that hold certain similarities will be transformed. This first goal will be achieved by introducing another function called ***noaa_filter***, and the latter by applying basic techniques of string manipulations. Although my objective was to fully automate this whole process, the first step - copying the data from the pdf, will be involved with a manual step.
 
-#### Basic string manipulations
+#### Step 1: Basic string manipulations
 
 ```{r,echo=T}
 # applying string manipulation to clean the EVTYPE variable
@@ -87,9 +87,8 @@ e_types <- str_trim(e_types)
 length(unique(e_types))
 ```
 
-#### Copy Table 1
-open [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and scroll down to page 6 to **Table 1 *Storm Data***, mark the table with the mouse, copy the content to a clipboard, create a text file called *"noaa_e_types.txt"*, and paste the clipboard into it.
-Afterwards, based on the file's data, we will create two R variables *noaa_glossary* and *noaa_e_types*
+#### Step 2: Copy Table 1
+I opened [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and scrolled down to page 6 to **Table 1 *Storm Data***, copied the table into *"noaa_e_types.txt"*, a file I created in my working directory. After processing the file's data, I created two R variables *noaa_glossary* and *noaa_e_types*
 ```{r noaa_e_types.txt,echo=T}
 system("head noaa_e_types.txt")
 # Astronomical Low Tide Z
@@ -122,7 +121,7 @@ noaa_e_types <- str_trim(noaa_e_types)
 noaa_e_types
 ```
 
-#### Utility function: noaa_filter
+#### Step 3: Utility function: noaa_filter
 
 ```{r glossary,echo=T}
 # declaring a filter utility function 
@@ -154,7 +153,7 @@ eu <- unique(e_types)
 data.frame(before = eu[658:660], after = noaa_filter(eu[658:660], noaa_glossary, "(*)"))
 ```
 
-#### Utility function: noaa_match
+#### Step 4: Utility function: noaa_match
 
 ```{r,echo=T}
 # declaring a utility function 
@@ -184,36 +183,41 @@ noaa_match <- function(s_vec, candidates) {
 data.frame(event = eu[6:9], match = noaa_match(eu[6:9], noaa_e_types))
 ```
 
-#### Handling EVTYPE of the form of "Summary of .."
-
-The information describing these type of events is given as a free text under the REMARKS variable. In this situtations we will match REMARKS with the events of **Table 1**.
+#### Step 5: Handling EVTYPE of the form of "Summary of .."
 ```{r,echo=T}
-# example
-head(d[grepl(".*summary.*", e_types, ignore.case = T), 8],1)
-
 # ratio 
 e_summary <- grepl(".*summary.*", e_types, ignore.case = T)
 data.frame( mean = mean(e_summary), total = sum(e_summary))
-
-
+```
+Events of 76 observations (0.0084 %) are of the form "Summary of..". In order to qualify them into valid event types, I extracted supportive information from the REMARKS variable.
+```{r,echo=T}
+# example
+remarks_example <- head(d[grepl(".*summary.*", e_types, ignore.case = T), 8],1)
+remarks_example
+remarks_match <- toupper(remarks_example)
+remarks_match <- noaa_filter(remarks_match, noaa_glossary, "")
+remarks_match <- noaa_match(remarks_match, noaa_e_types)
+remarks_match
+```
+Applying the step to all relevant observations.
+```{r,echo=T}
 remarks <- d[e_summary, 8]
 remarks <- toupper(remarks)
 remarks <- noaa_filter(remarks, noaa_glossary, "")
 remarks <- noaa_match(remarks, noaa_e_types)
-remarks
-
 e_types[e_summary] <- remarks
 ```
 
-#### Modifying similar words
+#### Step 6: Handling similarities and abbreviations in terminology
+A good example to demonstrate the problem is the term "SNOW".
 ```{r example,echo=T}
 u <- unique(e_types)
 u[grepl("SNOW[A-Z]+", u)]
 
-similarities <- c("FLOOD", "SNOW", "WIND", "WILDFIRES")
-for (s in similarities) {
-  regex <- paste0("[A-Z]*",s,"[A-Z]*")
-  exp <- paste0(" ",s," ")
+terms <- c("FLOOD", "SNOW", "WIND", "WILDFIRES")
+for (t in terms) {
+  regex <- paste0("[A-Z]*",t,"[A-Z]*")
+  exp <- paste0(" ",t," ")
   e_types <- gsub( regex, exp, e_types)  
 }
 
@@ -225,29 +229,26 @@ e_types <- gsub("[ ]+", " ",  e_types)
 # trimming
 e_types <- str_trim(e_types)
 
+# sanity check to be sure we are moving in the right direction
 eu <- unique(e_types)
 length(eu)
 ```
 
-#### Filtering EVTYPE
+#### Step 7: Finding a Match
 
-```{r,echo=T}
+```{r,echo=T, message=F}
+
+# first filtering out extrinsic terms
 df0 <- data.frame(e_type=eu, e_filtered = noaa_filter(eu, noaa_glossary, ""), stringsAsFactors = F)
 eu <- unique(df0$e_filtered)
 length(eu)
-```
 
-#### Matching EVTYPE
-
-```{r,echo=T}
+# second - finding a match
 df1 <- data.frame(e_filtered=eu, bool=eu %in% noaa_e_types, stringsAsFactors = F)
 df1$e_match <- noaa_match(eu, noaa_e_types)
 df1[!df1$bool,c(1,3)][148:155,]
-```
 
-#### Merging and integrating matches to the primary dataset *e_types*
-
-```{r,echo=T, message = F}
+# third - merging and incorporation
 # joining df0 and df1
 df_0_1 <- left_join(df0,df1)
 head(df_0_1)
@@ -260,36 +261,37 @@ sample_n(e_joined, 10)
 e_types <- e_joined$e_match
 d[,1] <- e_types
 
-# excluding empty observations 
+# removing empty observations 
 d <- d[nchar(d$EVTYPE) > 0,]
+length(unique(d$EVTYPE))
 ```
 
-### Cleaning Property and Crop Variables
+### Step 8: Cleaning Property and Crop Variables
 
 ```{r,echo=T, message = F}
 # property
 prop_dmg_exp <- data.frame(PROPDMGEXP = d$PROPDMGEXP, stringsAsFactors = F)
-unique(prop_dmg_exp$PROPDMGEXP)
+# crop
+crop_dmg_exp <- data.frame(CROPDMGEXP = d$CROPDMGEXP, stringsAsFactors = F)
+unique(c(prop_dmg_exp$PROPDMGEXP, crop_dmg_exp$CROPDMGEXP))
 
-# quite a lot of data is incomplete
-mean(grepl("[- ?+]|(^$)", prop_dmg_exp$PROPDMGEXP))
-
+# conversion table from chars to numeric
 magnitudes_chr = c("B", "b", "M", "m", "K", "k" , "H", "h", 9:0, "+", "-", "", "?")
 magnitudes_num = c(9, 9, 6, 6, 3, 3, 2, 2, 9:0, 0, 0, 0, 0)
-magnitudes <- data.frame(PROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
+magnitudes <- data.frame( ch = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
 head(magnitudes)
 
+# checking missing values
+# 51% of the data is incomplete .. quite a lot
+missing_prop <- mean(grepl("[- ?+]|(^$)", prop_dmg_exp$PROPDMGEXP))
+missing_crop <- mean(grepl("[- ?+]|(^$)", crop_dmg_exp$CROPDMGEXP))
+data.frame( missing_prop, missing_crop)
+
+names(magnitudes) <- c("PROPDMGEXP", "value") 
 prop_dmg_exp_num <- left_join(prop_dmg_exp, magnitudes)
 d$PROPDMGEXP <- prop_dmg_exp_num$value
 
-# crop
-crop_dmg_exp <- data.frame(CROPDMGEXP = d$CROPDMGEXP, stringsAsFactors = F)
-unique(crop_dmg_exp$CROPDMGEXP)
-
-# quite a lot of data is incomplete
-mean(grepl("[- ?+]|(^$)", crop_dmg_exp$CROPDMGEXP))
-magnitudes <- data.frame(CROPDMGEXP = magnitudes_chr, value = magnitudes_num , stringsAsFactors=F)
-
+names(magnitudes) <- c("CROPDMGEXP", "value") 
 crop_dmg_exp_num <- left_join(crop_dmg_exp, magnitudes)
 d$CROPDMGEXP <- crop_dmg_exp_num$value
 ```
@@ -298,7 +300,7 @@ d$CROPDMGEXP <- crop_dmg_exp_num$value
 
 #### Public Health
 
-```{r,echo=T, message = F}
+```{r,echo=T, message = F, fig.width=12, fig.height=10}
 grp <- group_by(d, EVTYPE)
 summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
 summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
@@ -306,12 +308,12 @@ summarized
 
 melted <- melt(summarized[,c(1,4,6)], c("EVTYPE"))
 melted$EVTYPE <- factor(summarized$EVTYPE,levels=summarized$EVTYPE)
-qplot(EVTYPE, value, data = melted, fill = variable, geom = "bar") + geom_bar(stat="identity", size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Persons") + xlab("Event") + ggtitle(expression(atop("Average Fatality and Injury Rate in Number of Persons", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Fatality", "Injury"))
+qplot(data = melted, x = EVTYPE, y = value, fill = variable, geom = "bar", stat="identity") + geom_bar(size=.3, stat="identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Persons") + xlab("Event") + ggtitle(expression(atop("Average Fatality and Injury Rate in Number of Persons", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Fatality", "Injury"))
 ```
 
 #### Property and Crops
 
-```{r,echo=T, message = F}
+```{r,echo=T, message = F, fig.width=12, fig.height=10}
 grp_dmg <- filter(d, PROPDMG > 0 | CROPDMG > 0) %>% group_by(EVTYPE)
 summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9) %>% mutate(sub_total_dmg = total_prop_dmg + total_crop_dmg) %>% arrange(desc(sub_total_dmg)) 
 summarized_dmg
@@ -319,5 +321,5 @@ summarized_dmg
 e_factor <- factor(summarized_dmg$EVTYPE,levels=summarized_dmg$EVTYPE)
 melted <- melt(summarized_dmg[,c(1,3,4)], c("EVTYPE"))
 melted$EVTYPE <- e_factor
-qplot(EVTYPE, value, data = melted, fill = variable, geom = "bar") + geom_bar(stat="identity", size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Billions USD") + xlab("Event") + ggtitle(expression(atop("Total Damage to Properties and Crops in Billions of USD", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Properties", "Crops"))
+qplot(data = melted, x = EVTYPE, y = value, fill = variable, geom = "bar", stat="identity") + geom_bar(stat="identity", size=.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  ylab("Billions USD") + xlab("Event") + ggtitle(expression(atop("Total Damage to Properties and Crops in Billions of USD", atop("USA 1950 - 2011")))) + scale_fill_discrete(name="Type", labels=c("Properties", "Crops"))
 ```
