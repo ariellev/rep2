@@ -1,5 +1,8 @@
 ---
-title: "Severe Weather Events in the US between 1950 and 2011: Costs in Property and Public Health"
+title: "Severe Weather Events in the US between 1950 and 2011: Proportion of Damage to Property and Public Health"
+author: Ariel Lev
+date : April 22nd, 2015
+
 output: 
   html_document:
     keep_md: true
@@ -7,7 +10,7 @@ output:
 
 ### Synopsis
 
-This report is based on a NOAA Storm Dataset containing over 900K meteorological events that took place in the U.S. between the years 1950 and 2011. Meteorolgical events were categorized by NOAA into 48 different types as specified in **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the proportion of damage caused by each event type to both property and public health. The results show, that 14979 people lost their lives, 139260 others were injured. The events with the highest average mortality rate, 1.65, are Tsunamis. Second deadly phenomenon were Heats (1.27), followed by Excessive Heats (1.10) and Rip Currents (0.73). Highest injury rates were caused by Tsunamis (6.45), Hurricanes/Typhoons (4.48), Excessive Heats (3.78) and Heats (2.83). In regard of loss to property, I found out that Floods, Hurricanes/Typhoons and Tornados were the most destructive ones - with an average of more than 150, 85 and 57 Billions USD correspondingly. As for damage to crops, Droughts, Floods and Hurricanes/Typhoons were the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD correspondingly. The overall damage summed up to 472.79 Billions of USD.
+This report is based on a NOAA Storm Dataset containing over 900K meteorological events that took place in the U.S. between the years 1950 and 2011. Meteorolgical events were categorized by NOAA into 48 different types as specified in **Table 1: Storm Data** in [National Weather Service Instruction 10-1605.pdf](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) . The focus of my study was to assess the proportion of damage caused by each event type to both property and public health. The results show, that **14979** people lost their lives, **139260** others were injured. Highest mortality rate was an outcome of Tsunamis - with an average of 1.65 casualties. Second deadly phenomenon were Heats (1.27), followed by Excessive Heats (1.10) and Rip Currents (0.73). In terms of loss to property, I found out that Floods, Hurricanes/Typhoons and Tornados were the most destructive ones - with an average of more than 150, 85 and 57 Billions USD respectively. As for damage to crops, Droughts, Floods and Hurricanes/Typhoons were the most destructive with an average damage of 13.9, 10.8, 5.5 Billions USD respectively. The overall damage summed up to **472.79 Billions** of USD.
 
 ```{r,echo=F, message=F}
 library(knitr)
@@ -69,7 +72,7 @@ After a short examination of the size of the unique values of EVTYPE, it turns o
 
 ### Cleaning EVTYPE
 
-In this section I would like to demonstrate a method to clean EVTYPE. The strategy would be in general to **automatically** find a best match between a given EVTYPE to a possible candidate in **Table 1**. For that purpose I will introduce a simple but powerful utility function called ***noaa_match***. Prior to finding a match, we will have to reduce the noise, i.e terms extrinsic to **Table 1** ( lets say "Chocolate" or "Beer") - will have to be completely remove, and those that hold certain similarities will be transformed. This first goal will be achieved by introducing another function called ***noaa_filter***, and the latter by applying basic techniques of string manipulations. Although my objective was to fully automate this whole process, the first step - copying the data from the pdf, will be involved with a manual step.
+In this section I would like to demonstrate a method to clean EVTYPE. The strategy would be in general to **automatically** find a best match between a given EVTYPE to a possible candidate in **Table 1**. For that purpose I will introduce a simple yet powerful utility function called ***noaa_match***. Prior to finding a match, we will have to reduce the noise, i.e terms extrinsic to **Table 1** ( lets say "Chocolate" or "Beer") - will have to be completely remove, and those that hold certain similarities will be transformed. This first goal will be achieved by introducing another function called ***noaa_filter***, and the latter by applying basic techniques of string manipulations. Although my objective was to fully automate this whole process, the first step - copying the data from the pdf, will be involved with a manual step.
 
 #### Step 1: Basic string manipulations
 
@@ -266,7 +269,7 @@ d <- d[nchar(d$EVTYPE) > 0,]
 length(unique(d$EVTYPE))
 ```
 
-### Step 8: Cleaning Property and Crop Variables
+#### Step 8: Cleaning Property and Crop Variables
 
 ```{r,echo=T, message = F}
 # property
@@ -299,12 +302,15 @@ d$CROPDMGEXP <- crop_dmg_exp_num$value
 ### Results
 
 #### Public Health
-
-```{r,echo=T, message = F, fig.width=12, fig.height=10}
+```{r,echo=T, message = F}
 grp <- group_by(d, EVTYPE)
 summarized <- summarize(grp, count = n(), fatalities = sum(FATALITIES), fatalities_mean = round(mean(FATALITIES),3), injuries = sum(INJURIES), injuries_mean = round(mean(INJURIES),3) )
 summarized <- summarized %>% arrange(desc(fatalities_mean, injuries_mean)) 
+summarized <- summarized[1:15,]
 summarized
+```
+Following figure depicts the average fatality rate of the 15 most harmful events. Their average injury rate are shown right on op.
+```{r,echo=T, message = F, fig.width=12, fig.height=10}
 
 melted <- melt(summarized[,c(1,4,6)], c("EVTYPE"))
 melted$EVTYPE <- factor(summarized$EVTYPE,levels=summarized$EVTYPE)
@@ -312,12 +318,14 @@ qplot(data = melted, x = EVTYPE, y = value, fill = variable, geom = "bar", stat=
 ```
 
 #### Property and Crops
-
-```{r,echo=T, message = F, fig.width=12, fig.height=10}
+```{r,echo=T, message = F}
 grp_dmg <- filter(d, PROPDMG > 0 | CROPDMG > 0) %>% group_by(EVTYPE)
 summarized_dmg <- mutate(grp_dmg, prop_dmg = PROPDMG*10^PROPDMGEXP, crop_dmg = CROPDMG*10^CROPDMGEXP) %>% summarize(count = n(), total_prop_dmg = sum(prop_dmg) / 10^9, total_crop_dmg = sum(crop_dmg) / 10^9) %>% mutate(sub_total_dmg = total_prop_dmg + total_crop_dmg) %>% arrange(desc(sub_total_dmg)) 
+summarized_dmg <- summarized_dmg[1:15,]
 summarized_dmg
-
+```
+Following figure depicts the total damage to properties and crops of the 15 most destructive events. Figures are given in billions of USD. 
+```{r,echo=T, message = F, fig.width=12, fig.height=10}
 e_factor <- factor(summarized_dmg$EVTYPE,levels=summarized_dmg$EVTYPE)
 melted <- melt(summarized_dmg[,c(1,3,4)], c("EVTYPE"))
 melted$EVTYPE <- e_factor
